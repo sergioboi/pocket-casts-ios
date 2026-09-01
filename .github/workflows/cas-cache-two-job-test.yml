@@ -59,6 +59,9 @@ jobs:
           sudo xcode-select -s "${{ env.xcode_path }}"
           xcodebuild -version
 
+      - name: Configure for external contributor
+        run: make external_contributor
+
       - name: Disable Swift macro validation
         run: |
           defaults write com.apple.dt.Xcode \
