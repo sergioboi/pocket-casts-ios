@@ -1,0 +1,150 @@
+name: CAS cache two-job test
+
+on:
+  workflow_dispatch:
+    inputs:
+      cache_mode:
+        description: Cache mode to test
+        type: choice
+        required: true
+        default: local
+        options:
+          - local
+          - remote
+      clear_local_cache_dir:
+        description: Clear .ci/cas-build-cache before cold local-cache builds
+        type: boolean
+        required: true
+        default: true
+
+env:
+  xcode_path: /Applications/Xcode_26.6.app/Contents/Developer
+
+jobs:
+  cas-cache-test:
+    name: CAS cache warm and verify
+    runs-on: macos-15
+    env:
+      CACHE_MODE: ${{ inputs.cache_mode }}
+      CLEAR_LOCAL_CACHE_DIR: ${{ inputs.clear_local_cache_dir }}
+
+    steps:
+      - name: Print Mac machine info
+        run: |
+          echo "Runner:"
+          echo "  name=${RUNNER_NAME}"
+          echo "  os=${RUNNER_OS}"
+          echo "  arch=${RUNNER_ARCH}"
+
+          echo
+          echo "macOS:"
+          sw_vers
+
+          echo
+          echo "Hardware:"
+          echo "  model=$(sysctl -n hw.model)"
+          echo "  cpu=$(sysctl -n machdep.cpu.brand_string)"
+          echo "  arch=$(uname -m)"
+          echo "  physical_cores=$(sysctl -n hw.physicalcpu)"
+          echo "  logical_cores=$(sysctl -n hw.logicalcpu)"
+          mem_bytes="$(sysctl -n hw.memsize)"
+          ram_gb="$(awk -v bytes="${mem_bytes}" 'BEGIN { printf "%.2f", bytes / 1024 / 1024 / 1024 }')"
+          echo "  ram_gb=${ram_gb}"
+
+      - name: Check out source code
+        uses: actions/checkout@v4.1.7
+
+      - name: Select required Xcode version
+        run: |
+          sudo xcode-select -s "${{ env.xcode_path }}"
+          xcodebuild -version
+
+      - name: Disable Swift macro validation
+        run: |
+          defaults write com.apple.dt.Xcode \
+            IDESkipMacroFingerprintValidation -bool YES
+
+      - name: Install CASBuildCache
+        if: ${{ inputs.cache_mode == 'local' }}
+        run: exec ./.github/scripts/install-cas-build-cache.sh
+
+      - name: Install xcodecacheprog
+        if: ${{ inputs.cache_mode == 'remote' }}
+        run: exec ./.github/scripts/install-xcodecacheprog.sh
+
+      - name: Select cache build script
+        run: |
+          if [[ "${CACHE_MODE}" == "remote" ]]; then
+            echo "CACHE_BUILD_SCRIPT=./.github/scripts/run-remote-cached-pocket-casts-build.sh" >> "${GITHUB_ENV}"
+          else
+            echo "CACHE_BUILD_SCRIPT=./.github/scripts/run-cas-cached-pocket-casts-build.sh" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Ensure first build starts without local CAS data
+        run: |
+          if [[ "${CACHE_MODE}" == "local" && "${CLEAR_LOCAL_CACHE_DIR}" == "true" ]]; then
+            rm -rf .ci/cas-build-cache
+          else
+            echo "Skipping local CAS cache directory cleanup"
+          fi
+
+      - name: Build with empty CAS cache
+        env:
+          XCODECACHEPROG_TOKEN: ${{ secrets.XCODECACHEPROG_TOKEN }}
+        run: exec "${CACHE_BUILD_SCRIPT}"
+
+      - name: Ensure second build starts without local CAS data
+        run: |
+          if [[ "${CACHE_MODE}" == "local" && "${CLEAR_LOCAL_CACHE_DIR}" == "true" ]]; then
+            rm -rf .ci/cas-build-cache
+          else
+            echo "Skipping local CAS cache directory cleanup"
+          fi
+
+      - name: Clean DerivedData before warm build
+        run: |
+          rm -rf "${HOME}/DerivedData"
+          rm -rf "${HOME}/Library/Developer/Xcode/DerivedData"
+
+      - name: Clean Xcode build products before warm build
+        run: |
+          xcodebuild clean \
+            -project podcasts.xcodeproj \
+            -scheme "Pocket Casts Staging" \
+            -configuration StagingDebug \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGN_IDENTITY= \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Build after clean to warm CAS cache
+        env:
+          XCODECACHEPROG_TOKEN: ${{ secrets.XCODECACHEPROG_TOKEN }}
+        run: exec "${CACHE_BUILD_SCRIPT}"
+
+      - name: Show warmed cache
+        if: ${{ inputs.cache_mode == 'local' }}
+        run: |
+          du -sh .ci/cas-build-cache
+          find .ci/cas-build-cache -maxdepth 2 -type f | head -n 30
+
+      - name: Clean DerivedData before warmed build
+        run: |
+          rm -rf "${HOME}/DerivedData"
+          rm -rf "${HOME}/Library/Developer/Xcode/DerivedData"
+
+      - name: Clean Xcode build products before warmed build
+        run: |
+          xcodebuild clean \
+            -project podcasts.xcodeproj \
+            -scheme "Pocket Casts Staging" \
+            -configuration StagingDebug \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGN_IDENTITY= \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Build after clean with warmed CAS cache
+        env:
+          XCODECACHEPROG_TOKEN: ${{ secrets.XCODECACHEPROG_TOKEN }}
+        run: exec "${CACHE_BUILD_SCRIPT}"
