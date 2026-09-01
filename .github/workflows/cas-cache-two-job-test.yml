@@ -23,7 +23,7 @@ env:
 jobs:
   cas-cache-test:
     name: CAS cache warm and verify
-    runs-on: macos-15
+    runs-on: macos-26
     env:
       CACHE_MODE: ${{ inputs.cache_mode }}
       CLEAR_LOCAL_CACHE_DIR: ${{ inputs.clear_local_cache_dir }}
