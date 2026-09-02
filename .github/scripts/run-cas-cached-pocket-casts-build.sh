@@ -9,7 +9,7 @@ CONFIG_FILE="${STATE_DIR}/config.toml"
 SOCKET_PATH="${HOME}/.local/state/cas-build-cache/cache.sock"
 EXPORT_DIR="${STATE_DIR}/exports"
 SERVER_LOG="${STATE_DIR}/server.log"
-DERIVED_DATA_PATH="${HOME}/DerivedData"
+DERIVED_DATA_PATH="${POCKET_CASTS_DERIVED_DATA_PATH:-${HOME}/DerivedData}"
 
 mkdir -p "$CACHE_DIR"
 mkdir -p "$STATE_DIR"
@@ -99,32 +99,21 @@ xcodebuild -version
 
 echo "=== Effective settings ==="
 xcodebuild \
-  -project podcasts.xcodeproj \
-  -scheme "Pocket Casts Staging" \
-  -configuration StagingDebug \
+  -project "${WORKSPACE}/${POCKET_CASTS_PROJECT:-podcasts.xcodeproj}" \
+  -scheme "${POCKET_CASTS_SCHEME:-Pocket Casts Staging}" \
+  -configuration "${POCKET_CASTS_CONFIGURATION:-StagingDebug}" \
   -destination "generic/platform=iOS Simulator" \
   -showBuildSettings |
 grep -E 'DT_TOOLCHAIN_DIR|TOOLCHAIN_DIR|HEADER_SEARCH_PATHS|SDKROOT'
 
 echo "Resolving Swift package dependencies"
 xcodebuild \
-  -project "${WORKSPACE}/podcasts.xcodeproj" \
+  -project "${WORKSPACE}/${POCKET_CASTS_PROJECT:-podcasts.xcodeproj}" \
   -resolvePackageDependencies \
   -onlyUsePackageVersionsFromResolvedFile
 
-echo "Running Pocket Casts build"
-xcodebuild \
-  -project "${WORKSPACE}/podcasts.xcodeproj" \
-  -scheme "Pocket Casts Staging" \
-  -configuration StagingDebug \
-  -destination "generic/platform=iOS Simulator" \
-  COMPILER_INDEX_STORE_ENABLE=NO \
-  build \
-  CODE_SIGN_IDENTITY= \
-  CODE_SIGNING_REQUIRED=NO \
-  CODE_SIGNING_ALLOWED=NO \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  -skipMacroValidation \
+echo "Running Pocket Casts build-for-testing"
+"${WORKSPACE}/.github/scripts/run-pocket-casts-build-for-testing.sh" \
   COMPILATION_CACHE_ENABLE_CACHING=YES \
   COMPILATION_CACHE_ENABLE_PLUGIN=YES \
   COMPILATION_CACHE_REMOTE_SERVICE_PATH="$SOCKET_PATH"

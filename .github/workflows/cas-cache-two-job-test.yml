@@ -27,6 +27,11 @@ jobs:
     env:
       CACHE_MODE: ${{ inputs.cache_mode }}
       CLEAR_LOCAL_CACHE_DIR: ${{ inputs.clear_local_cache_dir }}
+      POCKET_CASTS_PROJECT: podcasts.xcodeproj
+      POCKET_CASTS_SCHEME: Pocket Casts Staging
+      POCKET_CASTS_CONFIGURATION: StagingDebug
+      POCKET_CASTS_TEST_PLAN: UnitTests
+      POCKET_CASTS_TEST_DESTINATION: platform=iOS Simulator,name=iPhone 17,OS=26.5
 
     steps:
       - name: Print Mac machine info
@@ -53,6 +58,9 @@ jobs:
 
       - name: Check out source code
         uses: actions/checkout@v4.1.7
+
+      - name: Set Pocket Casts DerivedData path
+        run: echo "POCKET_CASTS_DERIVED_DATA_PATH=${RUNNER_TEMP}/pocket-casts-derived-data" >> "${GITHUB_ENV}"
 
       - name: Select required Xcode version
         run: |
@@ -106,15 +114,15 @@ jobs:
 
       - name: Clean DerivedData before warm build
         run: |
-          rm -rf "${HOME}/DerivedData"
+          rm -rf "${POCKET_CASTS_DERIVED_DATA_PATH}"
           rm -rf "${HOME}/Library/Developer/Xcode/DerivedData"
 
       - name: Clean Xcode build products before warm build
         run: |
           xcodebuild clean \
-            -project podcasts.xcodeproj \
-            -scheme "Pocket Casts Staging" \
-            -configuration StagingDebug \
+            -project "${POCKET_CASTS_PROJECT}" \
+            -scheme "${POCKET_CASTS_SCHEME}" \
+            -configuration "${POCKET_CASTS_CONFIGURATION}" \
             -destination "generic/platform=iOS Simulator" \
             CODE_SIGN_IDENTITY= \
             CODE_SIGNING_REQUIRED=NO \
@@ -133,15 +141,15 @@ jobs:
 
       - name: Clean DerivedData before warmed build
         run: |
-          rm -rf "${HOME}/DerivedData"
+          rm -rf "${POCKET_CASTS_DERIVED_DATA_PATH}"
           rm -rf "${HOME}/Library/Developer/Xcode/DerivedData"
 
       - name: Clean Xcode build products before warmed build
         run: |
           xcodebuild clean \
-            -project podcasts.xcodeproj \
-            -scheme "Pocket Casts Staging" \
-            -configuration StagingDebug \
+            -project "${POCKET_CASTS_PROJECT}" \
+            -scheme "${POCKET_CASTS_SCHEME}" \
+            -configuration "${POCKET_CASTS_CONFIGURATION}" \
             -destination "generic/platform=iOS Simulator" \
             CODE_SIGN_IDENTITY= \
             CODE_SIGNING_REQUIRED=NO \
@@ -151,3 +159,6 @@ jobs:
         env:
           XCODECACHEPROG_TOKEN: ${{ secrets.XCODECACHEPROG_TOKEN }}
         run: exec "${CACHE_BUILD_SCRIPT}"
+
+      - name: Run Pocket Casts unit tests without building
+        run: exec ./.github/scripts/run-pocket-casts-test-without-building.sh

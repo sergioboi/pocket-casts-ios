@@ -11,7 +11,7 @@ WORKSPACE="${GITHUB_WORKSPACE:-$(pwd)}"
 PROJECT_DIR="$WORKSPACE"
 CREDENTIAL_NAME="${XCODECACHEPROG_CREDENTIAL_NAME:-pocket-casts-ios}"
 CONFIG_FILE="${PROJECT_DIR}/XcodeRemoteCache.xcconfig"
-DERIVED_DATA_PATH="${HOME}/DerivedData"
+DERIVED_DATA_PATH="${POCKET_CASTS_DERIVED_DATA_PATH:-${HOME}/DerivedData}"
 
 if [[ ! -d "${PROJECT_DIR}/.xcodecacheprog" ]]; then
   echo ".xcodecacheprog is required for remote cache builds" >&2
@@ -48,33 +48,22 @@ xcodebuild -version
 echo "=== Effective settings ==="
 XCODE_XCCONFIG_FILE="$CONFIG_FILE" \
 xcodebuild \
-  -project podcasts.xcodeproj \
-  -scheme "Pocket Casts Staging" \
-  -configuration StagingDebug \
+  -project "${WORKSPACE}/${POCKET_CASTS_PROJECT:-podcasts.xcodeproj}" \
+  -scheme "${POCKET_CASTS_SCHEME:-Pocket Casts Staging}" \
+  -configuration "${POCKET_CASTS_CONFIGURATION:-StagingDebug}" \
   -destination "generic/platform=iOS Simulator" \
   -showBuildSettings |
 grep -E 'DT_TOOLCHAIN_DIR|TOOLCHAIN_DIR|HEADER_SEARCH_PATHS|SDKROOT'
 
 echo "Resolving Swift package dependencies"
 xcodebuild \
-  -project "${WORKSPACE}/podcasts.xcodeproj" \
+  -project "${WORKSPACE}/${POCKET_CASTS_PROJECT:-podcasts.xcodeproj}" \
   -resolvePackageDependencies \
   -onlyUsePackageVersionsFromResolvedFile
 
-echo "Running Pocket Casts build"
+echo "Running Pocket Casts build-for-testing"
 XCODE_XCCONFIG_FILE="$CONFIG_FILE" \
-xcodebuild \
-  -project "${WORKSPACE}/podcasts.xcodeproj" \
-  -scheme "Pocket Casts Staging" \
-  -configuration StagingDebug \
-  -destination "generic/platform=iOS Simulator" \
-  COMPILER_INDEX_STORE_ENABLE=NO \
-  build \
-  CODE_SIGN_IDENTITY= \
-  CODE_SIGNING_REQUIRED=NO \
-  CODE_SIGNING_ALLOWED=NO \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  -skipMacroValidation
+"${WORKSPACE}/.github/scripts/run-pocket-casts-build-for-testing.sh"
 
 echo
 echo "Remote cache status after build"
