@@ -112,8 +112,8 @@ xcodebuild \
   -resolvePackageDependencies \
   -onlyUsePackageVersionsFromResolvedFile
 
-echo "Running Pocket Casts build-for-testing"
-"${WORKSPACE}/.github/scripts/run-pocket-casts-build-for-testing.sh" \
+echo "Running Pocket Casts ${POCKET_CASTS_BUILD_TASK:-build-for-testing}"
+"${WORKSPACE}/.github/scripts/run-pocket-casts-build.sh" \
   COMPILATION_CACHE_ENABLE_CACHING=YES \
   COMPILATION_CACHE_ENABLE_PLUGIN=YES \
   COMPILATION_CACHE_REMOTE_SERVICE_PATH="$SOCKET_PATH"

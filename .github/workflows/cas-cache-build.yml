@@ -1,0 +1,172 @@
+name: CAS cache build
+
+on:
+  workflow_dispatch:
+    inputs:
+      cache_mode:
+        description: Cache mode to use
+        type: choice
+        required: true
+        default: local
+        options:
+          - local
+          - remote
+      build_task:
+        description: Xcode build task to run
+        type: choice
+        required: true
+        default: build-for-testing
+        options:
+          - build
+          - build-for-testing
+      clear_local_cache_dir:
+        description: Clear .ci/cas-build-cache before the first cached build
+        type: boolean
+        required: true
+        default: true
+
+env:
+  xcode_path: /Applications/Xcode_26.6.app/Contents/Developer
+
+jobs:
+  cas-cache-build:
+    name: CAS cache build comparison
+    runs-on: macos-26
+    env:
+      CACHE_MODE: ${{ inputs.cache_mode }}
+      CLEAR_LOCAL_CACHE_DIR: ${{ inputs.clear_local_cache_dir }}
+      POCKET_CASTS_BUILD_TASK: ${{ inputs.build_task }}
+      POCKET_CASTS_PROJECT: podcasts.xcodeproj
+      POCKET_CASTS_SCHEME: Pocket Casts Staging
+      POCKET_CASTS_CONFIGURATION: StagingDebug
+      POCKET_CASTS_TEST_PLAN: UnitTests
+      POCKET_CASTS_TEST_DESTINATION: platform=iOS Simulator,name=iPhone 17,OS=26.5
+
+    steps:
+      - name: Print Mac machine info
+        run: |
+          echo "Runner:"
+          echo "  name=${RUNNER_NAME}"
+          echo "  os=${RUNNER_OS}"
+          echo "  arch=${RUNNER_ARCH}"
+
+          echo
+          echo "macOS:"
+          sw_vers
+
+          echo
+          echo "Hardware:"
+          echo "  model=$(sysctl -n hw.model)"
+          echo "  cpu=$(sysctl -n machdep.cpu.brand_string)"
+          echo "  arch=$(uname -m)"
+          echo "  physical_cores=$(sysctl -n hw.physicalcpu)"
+          echo "  logical_cores=$(sysctl -n hw.logicalcpu)"
+          mem_bytes="$(sysctl -n hw.memsize)"
+          ram_gb="$(awk -v bytes="${mem_bytes}" 'BEGIN { printf "%.2f", bytes / 1024 / 1024 / 1024 }')"
+          echo "  ram_gb=${ram_gb}"
+
+      - name: Check out source code
+        uses: actions/checkout@v4.1.7
+
+      - name: Set Pocket Casts DerivedData path
+        run: echo "POCKET_CASTS_DERIVED_DATA_PATH=${RUNNER_TEMP}/pocket-casts-derived-data" >> "${GITHUB_ENV}"
+
+      - name: Select required Xcode version
+        run: |
+          sudo xcode-select -s "${{ env.xcode_path }}"
+          xcodebuild -version
+
+      - name: Configure for external contributor
+        run: make external_contributor
+
+      - name: Disable Swift macro validation
+        run: |
+          defaults write com.apple.dt.Xcode \
+            IDESkipMacroFingerprintValidation -bool YES
+
+      - name: Install CASBuildCache
+        if: ${{ inputs.cache_mode == 'local' }}
+        run: exec ./.github/scripts/install-cas-build-cache.sh
+
+      - name: Install xcodecacheprog
+        env:
+          XCODECACHEPROG_TOKEN: ${{ secrets.XCODECACHEPROG_TOKEN }}
+        run: exec ./.github/scripts/install-xcodecacheprog.sh
+
+      - name: Full clean before uncached build
+        run: |
+          xcodebuild clean \
+            -project "${POCKET_CASTS_PROJECT}" \
+            -scheme "${POCKET_CASTS_SCHEME}" \
+            -configuration "${POCKET_CASTS_CONFIGURATION}" \
+            -destination "${POCKET_CASTS_TEST_DESTINATION}" \
+            CODE_SIGN_IDENTITY= \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+          rm -rf "${POCKET_CASTS_DERIVED_DATA_PATH}"
+          rm -rf "${HOME}/DerivedData"
+          rm -rf "${HOME}/Library/Developer/Xcode/DerivedData"
+
+      - name: Xcodebuild without cache
+        run: exec ./.github/scripts/run-pocket-casts-build.sh COMPILATION_CACHE_ENABLE_CACHING=NO COMPILATION_CACHE_ENABLE_PLUGIN=NO
+
+      - name: Clear local CAS cache before first cached build
+        if: ${{ inputs.cache_mode == 'local' && inputs.clear_local_cache_dir }}
+        run: rm -rf .ci/cas-build-cache
+
+      - name: Full clean before first cached build
+        run: |
+          xcodebuild clean \
+            -project "${POCKET_CASTS_PROJECT}" \
+            -scheme "${POCKET_CASTS_SCHEME}" \
+            -configuration "${POCKET_CASTS_CONFIGURATION}" \
+            -destination "${POCKET_CASTS_TEST_DESTINATION}" \
+            CODE_SIGN_IDENTITY= \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+          rm -rf "${POCKET_CASTS_DERIVED_DATA_PATH}"
+          rm -rf "${HOME}/DerivedData"
+          rm -rf "${HOME}/Library/Developer/Xcode/DerivedData"
+
+      - name: Xcodebuild with selected cache
+        env:
+          XCODECACHEPROG_TOKEN: ${{ secrets.XCODECACHEPROG_TOKEN }}
+        run: |
+          if [[ "${CACHE_MODE}" == "remote" ]]; then
+            exec ./.github/scripts/run-remote-cached-pocket-casts-build.sh
+          fi
+
+          exec ./.github/scripts/run-cas-cached-pocket-casts-build.sh
+
+      - name: Show warmed local cache
+        if: ${{ inputs.cache_mode == 'local' }}
+        run: |
+          du -sh .ci/cas-build-cache
+          find .ci/cas-build-cache -maxdepth 2 -type f | head -n 30
+
+      - name: Full clean before second cached build
+        run: |
+          xcodebuild clean \
+            -project "${POCKET_CASTS_PROJECT}" \
+            -scheme "${POCKET_CASTS_SCHEME}" \
+            -configuration "${POCKET_CASTS_CONFIGURATION}" \
+            -destination "${POCKET_CASTS_TEST_DESTINATION}" \
+            CODE_SIGN_IDENTITY= \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+          rm -rf "${POCKET_CASTS_DERIVED_DATA_PATH}"
+          rm -rf "${HOME}/DerivedData"
+          rm -rf "${HOME}/Library/Developer/Xcode/DerivedData"
+
+      - name: Xcodebuild with selected cache again
+        env:
+          XCODECACHEPROG_TOKEN: ${{ secrets.XCODECACHEPROG_TOKEN }}
+        run: |
+          if [[ "${CACHE_MODE}" == "remote" ]]; then
+            exec ./.github/scripts/run-remote-cached-pocket-casts-build.sh
+          fi
+
+          exec ./.github/scripts/run-cas-cached-pocket-casts-build.sh

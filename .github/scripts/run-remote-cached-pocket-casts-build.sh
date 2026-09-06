@@ -61,9 +61,9 @@ xcodebuild \
   -resolvePackageDependencies \
   -onlyUsePackageVersionsFromResolvedFile
 
-echo "Running Pocket Casts build-for-testing"
+echo "Running Pocket Casts ${POCKET_CASTS_BUILD_TASK:-build-for-testing}"
 XCODE_XCCONFIG_FILE="$CONFIG_FILE" \
-"${WORKSPACE}/.github/scripts/run-pocket-casts-build-for-testing.sh"
+"${WORKSPACE}/.github/scripts/run-pocket-casts-build.sh"
 
 echo
 echo "Remote cache status after build"
