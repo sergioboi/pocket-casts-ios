@@ -45,9 +45,29 @@ echo "XCTest run:    $XCTESTRUN_FILE"
 echo "Destination:   $DESTINATION"
 echo "Result bundle: $RESULT_BUNDLE_PATH"
 
+TEST_EXIT_CODE=0
+
 xcodebuild \
   test-without-building \
   -xctestrun "$XCTESTRUN_FILE" \
   -destination "$DESTINATION" \
   -resultBundlePath "$RESULT_BUNDLE_PATH" \
-  "$@"
+  "$@" || TEST_EXIT_CODE=$?
+
+if [[ -d "$RESULT_BUNDLE_PATH" ]]; then
+  echo
+  echo "=== Failed tests ==="
+  if ! xcrun xcresulttool get test-results summary \
+    --path "$RESULT_BUNDLE_PATH" \
+    --compact |
+    jq -r '
+      .testFailures[]? |
+      "FAILED \(.targetName)/\(.testIdentifierString)\n  \(.failureText)\n"
+    '; then
+    echo "Unable to parse test result bundle: $RESULT_BUNDLE_PATH" >&2
+  fi
+else
+  echo "Test result bundle not found: $RESULT_BUNDLE_PATH" >&2
+fi
+
+exit "$TEST_EXIT_CODE"

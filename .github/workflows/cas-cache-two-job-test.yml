@@ -1,32 +1,16 @@
-name: CAS cache two-job test
+name: CAS cache build and test
 
 on:
   workflow_dispatch:
-    inputs:
-      cache_mode:
-        description: Cache mode to test
-        type: choice
-        required: true
-        default: local
-        options:
-          - local
-          - remote
-      clear_local_cache_dir:
-        description: Clear .ci/cas-build-cache before cold local-cache builds
-        type: boolean
-        required: true
-        default: true
 
 env:
   xcode_path: /Applications/Xcode_26.6.app/Contents/Developer
 
 jobs:
   cas-cache-test:
-    name: CAS cache warm and verify
+    name: CAS cache build tests and verify
     runs-on: macos-26
     env:
-      CACHE_MODE: ${{ inputs.cache_mode }}
-      CLEAR_LOCAL_CACHE_DIR: ${{ inputs.clear_local_cache_dir }}
       POCKET_CASTS_PROJECT: podcasts.xcodeproj
       POCKET_CASTS_SCHEME: Pocket Casts Staging
       POCKET_CASTS_CONFIGURATION: StagingDebug
@@ -75,90 +59,63 @@ jobs:
           defaults write com.apple.dt.Xcode \
             IDESkipMacroFingerprintValidation -bool YES
 
-      - name: Install CASBuildCache
-        if: ${{ inputs.cache_mode == 'local' }}
-        run: exec ./.github/scripts/install-cas-build-cache.sh
-
       - name: Install xcodecacheprog
-        if: ${{ inputs.cache_mode == 'remote' }}
+        env:
+          XCODECACHEPROG_TOKEN: ${{ secrets.XCODECACHEPROG_TOKEN }}
         run: exec ./.github/scripts/install-xcodecacheprog.sh
 
-      - name: Select cache build script
-        run: |
-          if [[ "${CACHE_MODE}" == "remote" ]]; then
-            echo "CACHE_BUILD_SCRIPT=./.github/scripts/run-remote-cached-pocket-casts-build.sh" >> "${GITHUB_ENV}"
-          else
-            echo "CACHE_BUILD_SCRIPT=./.github/scripts/run-cas-cached-pocket-casts-build.sh" >> "${GITHUB_ENV}"
-          fi
+      - name: Build tests without cache
+        run: exec ./.github/scripts/run-pocket-casts-build-for-testing.sh COMPILATION_CACHE_ENABLE_CACHING=NO COMPILATION_CACHE_ENABLE_PLUGIN=NO
 
-      - name: Ensure first build starts without local CAS data
-        run: |
-          if [[ "${CACHE_MODE}" == "local" && "${CLEAR_LOCAL_CACHE_DIR}" == "true" ]]; then
-            rm -rf .ci/cas-build-cache
-          else
-            echo "Skipping local CAS cache directory cleanup"
-          fi
-
-      - name: Build with empty CAS cache
-        env:
-          XCODECACHEPROG_TOKEN: ${{ secrets.XCODECACHEPROG_TOKEN }}
-        run: exec "${CACHE_BUILD_SCRIPT}"
-
-      - name: Ensure second build starts without local CAS data
-        run: |
-          if [[ "${CACHE_MODE}" == "local" && "${CLEAR_LOCAL_CACHE_DIR}" == "true" ]]; then
-            rm -rf .ci/cas-build-cache
-          else
-            echo "Skipping local CAS cache directory cleanup"
-          fi
-
-      - name: Clean DerivedData before warm build
-        run: |
-          rm -rf "${POCKET_CASTS_DERIVED_DATA_PATH}"
-          rm -rf "${HOME}/Library/Developer/Xcode/DerivedData"
-
-      - name: Clean Xcode build products before warm build
-        run: |
-          xcodebuild clean \
-            -project "${POCKET_CASTS_PROJECT}" \
-            -scheme "${POCKET_CASTS_SCHEME}" \
-            -configuration "${POCKET_CASTS_CONFIGURATION}" \
-            -destination "generic/platform=iOS Simulator" \
-            CODE_SIGN_IDENTITY= \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
-
-      - name: Build after clean to warm CAS cache
-        env:
-          XCODECACHEPROG_TOKEN: ${{ secrets.XCODECACHEPROG_TOKEN }}
-        run: exec "${CACHE_BUILD_SCRIPT}"
-
-      - name: Show warmed cache
-        if: ${{ inputs.cache_mode == 'local' }}
-        run: |
-          du -sh .ci/cas-build-cache
-          find .ci/cas-build-cache -maxdepth 2 -type f | head -n 30
-
-      - name: Clean DerivedData before warmed build
-        run: |
-          rm -rf "${POCKET_CASTS_DERIVED_DATA_PATH}"
-          rm -rf "${HOME}/Library/Developer/Xcode/DerivedData"
-
-      - name: Clean Xcode build products before warmed build
-        run: |
-          xcodebuild clean \
-            -project "${POCKET_CASTS_PROJECT}" \
-            -scheme "${POCKET_CASTS_SCHEME}" \
-            -configuration "${POCKET_CASTS_CONFIGURATION}" \
-            -destination "generic/platform=iOS Simulator" \
-            CODE_SIGN_IDENTITY= \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
-
-      - name: Build after clean with warmed CAS cache
-        env:
-          XCODECACHEPROG_TOKEN: ${{ secrets.XCODECACHEPROG_TOKEN }}
-        run: exec "${CACHE_BUILD_SCRIPT}"
-
-      - name: Run Pocket Casts unit tests without building
+      - name: Test first no-cache build
         run: exec ./.github/scripts/run-pocket-casts-test-without-building.sh
+
+      - name: Full clean before second no-cache build
+        run: |
+          rm -rf "${POCKET_CASTS_DERIVED_DATA_PATH}"
+          rm -rf "${HOME}/Library/Developer/Xcode/DerivedData"
+          xcodebuild clean \
+            -project "${POCKET_CASTS_PROJECT}" \
+            -scheme "${POCKET_CASTS_SCHEME}" \
+            -configuration "${POCKET_CASTS_CONFIGURATION}" \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGN_IDENTITY= \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Build tests without cache after clean
+        run: exec ./.github/scripts/run-pocket-casts-build-for-testing.sh COMPILATION_CACHE_ENABLE_CACHING=NO COMPILATION_CACHE_ENABLE_PLUGIN=NO
+
+      - name: Test second no-cache build
+        run: exec ./.github/scripts/run-pocket-casts-test-without-building.sh
+
+      - name: Full clean before remote cached build
+        run: |
+          rm -rf "${POCKET_CASTS_DERIVED_DATA_PATH}"
+          rm -rf "${HOME}/Library/Developer/Xcode/DerivedData"
+          xcodebuild clean \
+            -project "${POCKET_CASTS_PROJECT}" \
+            -scheme "${POCKET_CASTS_SCHEME}" \
+            -configuration "${POCKET_CASTS_CONFIGURATION}" \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGN_IDENTITY= \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Build tests with cache enabled
+        env:
+          XCODECACHEPROG_TOKEN: ${{ secrets.XCODECACHEPROG_TOKEN }}
+        run: exec ./.github/scripts/run-remote-cached-pocket-casts-build.sh
+
+      - name: Test remote cached build with xcodecacheprog
+        run: |
+          XCTESTRUN_PATH="$(find "${POCKET_CASTS_DERIVED_DATA_PATH}/Build/Products" -maxdepth 1 -name '*.xctestrun' -print -quit)"
+          if [[ -z "${XCTESTRUN_PATH}" ]]; then
+            echo "No .xctestrun file found under ${POCKET_CASTS_DERIVED_DATA_PATH}/Build/Products" >&2
+            exit 1
+          fi
+
+          xcodecacheprog test \
+            --xctestrun "${XCTESTRUN_PATH}" \
+            --destination "${POCKET_CASTS_TEST_DESTINATION}" \
+            --ignore-non-cacheable
