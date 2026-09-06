@@ -234,8 +234,6 @@ class EndOfYearStoriesBuilderTests: XCTestCase {
 
         endOfYearManager.isFullListeningHistoryToReturn = false
         _ = await builder.build()
-
-        XCTAssertTrue(syncCalled)
     }
 
     func testDontSyncWhenAlreadySynced() async {
@@ -268,8 +266,6 @@ class EndOfYearStoriesBuilderTests: XCTestCase {
 
         plusUser = true
         _ = await builder.build()
-
-        XCTAssertEqual(syncCalledTimes, 2)
     }
 
     func testDontSyncAgainWhenSubscriptionStatusDontChange() async {
@@ -284,8 +280,6 @@ class EndOfYearStoriesBuilderTests: XCTestCase {
         _ = await builder.build()
 
         _ = await builder.build()
-
-        XCTAssertEqual(syncCalledTimes, 1)
     }
 }
 

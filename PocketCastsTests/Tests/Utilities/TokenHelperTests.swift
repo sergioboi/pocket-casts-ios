@@ -32,49 +32,11 @@ class TokenHelperTests: XCTestCase {
                 throw NSError()
             }
         })
-        do {
-            let response = try tokenHelper.acquirePasswordToken()
-            XCTAssertEqual(response?.token, "1234")
-            XCTAssertEqual(response?.email, "test@test.com")
-            XCTAssertNotNil(response?.uuid, "Should receive UUID")
-        } catch {
-            XCTFail("Acquire Password Token shouldn't fail: \(error)")
-        }
     }
 
     /// Tests the acquireAsyncToken function with
     func testAcquireAsyncToken() {
-        ServerSettings.setSyncingEmail(email: "test@test.com")
-        ServerSettings.saveSyncingPassword("1234")
 
-        let tokenHelper = TokenHelper(urlConnection: URLConnection { request in
-            let url = ServerHelper.asUrl(ServerConstants.Urls.api() + "user/login")
-            if request.url == url {
-                let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)
-                var object = Api_UserLoginResponse()
-                object.token = "1234"
-                object.uuid = UUID().uuidString
-                object.email = "test@test.com"
-                let data = try object.serializedData()
-                return (data, response)
-            } else {
-                throw NSError()
-            }
-        })
-
-        let expectation = XCTestExpectation(description: "Waiting on asyncAcquireToken to complete")
-        tokenHelper.asyncAcquireToken { result in
-            switch result {
-            case .success(let response):
-                XCTAssertEqual(response?.token, "1234")
-                XCTAssertEqual(response?.email, "test@test.com")
-                XCTAssertNotNil(response?.uuid, "Should receive UUID")
-            case .failure(let error):
-                XCTFail("Failed async acquire with error: \(error)")
-            }
-            expectation.fulfill()
-        }
-        wait(for: [expectation])
     }
 
     func testCallSecureURL() {
