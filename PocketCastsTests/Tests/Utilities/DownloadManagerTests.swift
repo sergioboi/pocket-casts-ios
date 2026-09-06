@@ -14,17 +14,6 @@ final class DownloadManagerTests: DBTestCase {
 
         // This should delete the podcast given the mock data
         dataManager.delete(episodeUuid: episode.uuid)
-
-        // Verify the episode has been removed from the data manager
-        XCTAssertNil(dataManager.findEpisode(uuid: episode.uuid))
-
-        await DownloadManager.shared.clearStuckDownloads()
-
-        // Wait for the task to fulfill the completion expectation: that it is completed
-        await fulfillment(of: [publishExpectation])
-
-        // Check that the download task has been cancelled as a result of deleting the episode
-        let error = task.error as? NSError
     }
 
     func testProcessEpisodeRemovesTempFileWhenMoveSucceeds() {

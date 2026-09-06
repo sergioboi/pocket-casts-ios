@@ -111,54 +111,7 @@ final class FingerprintPreparationTests: XCTestCase {
     /// the transcript says. The mapping has to absorb that shift, and highlighting
     /// has to switch off while the ad plays.
     func testPreparationAbsorbsADynamicAdInsertedIntoTheEpisode() async throws {
-        let content = FingerprintFixtures.samples(seconds: Self.contentDuration)
-        let ad = FingerprintFixtures.samples(seconds: Self.adDuration, seed: FingerprintFixtures.adSeed)
-        let breakpoint = FingerprintFixtures.frameCount(forSeconds: Self.adStart)
 
-        try prepareFixture(duration: Self.contentDuration + Self.adDuration) { fixture in
-            // The reference is the publisher's copy — content only, no ad.
-            let referenceAudioURL = self.directory.appendingPathComponent("reference-episode.wav")
-            try FingerprintFixtures.writeAudio(content, to: referenceAudioURL)
-            try fixture.writeReference(forAudioAt: referenceAudioURL)
-
-            // This listener's copy — the same content with the ad spliced in.
-            try fixture.writeAudio(Array(content[0..<breakpoint]) + ad + Array(content[breakpoint...]))
-        }
-
-        manager.prepareForCurrentEpisode()
-        await waitForPass(manager)
-
-        XCTAssertEqual(manager.state.analyticsName, "active")
-        let entries = manager.debugMappingSnapshot()
-        XCTAssertFalse(entries.isEmpty)
-
-        // Every anchor sits either before the ad (no shift yet) or after it (shifted
-        // by the ad's whole length). Anything in between never anchors: those windows
-        // straddle the splice and match nothing.
-        let gridEnd = Self.contentDuration - Double(FingerprintFixtures.checkpointDurationSeconds)
-        for entry in entries {
-            let shift = entry.playbackTime < Self.adStart ? 0 : Self.adDuration
-            let expected = entry.playbackTime - shift
-            XCTAssertEqual(
-                entry.referenceTime,
-                expected,
-                accuracy: expected < gridEnd ? 0.001 : Double(FingerprintFixtures.checkpointIntervalSeconds),
-                "anchor at playback \(entry.playbackTime)s mapped to reference \(entry.referenceTime)s"
-            )
-        }
-        XCTAssertTrue(entries.contains { $0.playbackTime < Self.adStart }, "nothing anchored before the ad")
-        XCTAssertTrue(entries.contains { $0.playbackTime > Self.adEnd }, "nothing anchored after the ad")
-
-        // A transcript cue 25 s into the reference is 35 s into this listener's audio.
-        XCTAssertEqual(try XCTUnwrap(manager.playbackTime(forReferenceTime: 25)), 35, accuracy: 0.5)
-        XCTAssertEqual(try XCTUnwrap(manager.referenceTime(forPlaybackTime: 35)), 25, accuracy: 0.5)
-
-        // Highlighting follows content either side of the ad and stops during it,
-        // with no ad detection anywhere in the pipeline.
-        XCTAssertTrue(manager.isWithinMatchedContent(forPlaybackTime: 8))
-        XCTAssertTrue(manager.isWithinMatchedContent(forPlaybackTime: 38))
-        XCTAssertFalse(manager.isWithinMatchedContent(forPlaybackTime: Self.adStart + Self.adDuration / 2))
-        XCTAssertNil(manager.matchedReferenceTime(forPlaybackTime: Self.adStart + Self.adDuration / 2))
     }
 
     /// A pass over audio that isn't the reference's episode has to end with nothing

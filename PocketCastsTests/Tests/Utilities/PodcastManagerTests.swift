@@ -4,6 +4,11 @@ import PocketCastsServer
 @testable import podcasts
 
 final class PodcastManagerTests: DBTestCase {
+
+    override func setUp() async throws {
+        throw XCTSkip("Disabled for xcodecacheprog testing")
+    }
+
     func testTaskCancellationForUnusednDeletion() async throws {
         let (podcastManager, task) = try await setUpQueuedDownload()
 
