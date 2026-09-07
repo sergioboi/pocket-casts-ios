@@ -74,14 +74,6 @@ jobs:
         run: |
           rm -rf "${POCKET_CASTS_DERIVED_DATA_PATH}"
           rm -rf "${HOME}/Library/Developer/Xcode/DerivedData"
-          xcodebuild clean \
-            -project "${POCKET_CASTS_PROJECT}" \
-            -scheme "${POCKET_CASTS_SCHEME}" \
-            -configuration "${POCKET_CASTS_CONFIGURATION}" \
-            -destination "generic/platform=iOS Simulator" \
-            CODE_SIGN_IDENTITY= \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
 
       - name: Build tests without cache after clean
         run: exec ./.github/scripts/run-pocket-casts-build-for-testing.sh COMPILATION_CACHE_ENABLE_CACHING=NO COMPILATION_CACHE_ENABLE_PLUGIN=NO
@@ -93,14 +85,6 @@ jobs:
         run: |
           rm -rf "${POCKET_CASTS_DERIVED_DATA_PATH}"
           rm -rf "${HOME}/Library/Developer/Xcode/DerivedData"
-          xcodebuild clean \
-            -project "${POCKET_CASTS_PROJECT}" \
-            -scheme "${POCKET_CASTS_SCHEME}" \
-            -configuration "${POCKET_CASTS_CONFIGURATION}" \
-            -destination "generic/platform=iOS Simulator" \
-            CODE_SIGN_IDENTITY= \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
 
       - name: Build tests with cache enabled
         env:
