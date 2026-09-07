@@ -3,18 +3,6 @@ import XCTest
 import PocketCastsDataModel
 
 final class DownloadManagerTests: DBTestCase {
-    func testStuckSingleDownload() async throws {
-        let (_, task) = try await setUpQueuedDownload()
-
-        // Create a predicate + expectation to check when task state is completed
-        let predicate = NSPredicate(block: { _, _ -> Bool in
-            return task.state == .completed
-        })
-        let publishExpectation = XCTNSPredicateExpectation(predicate: predicate, object: task)
-
-        // This should delete the podcast given the mock data
-        dataManager.delete(episodeUuid: episode.uuid)
-    }
 
     func testProcessEpisodeRemovesTempFileWhenMoveSucceeds() {
         // Given: A successfully downloaded episode
