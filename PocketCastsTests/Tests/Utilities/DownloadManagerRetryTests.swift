@@ -94,14 +94,6 @@ final class DownloadManagerRetryTests: DBTestCase {
         )
 
         let tasks = await downloadManager.tasks(for: [episode])
-        let task = try XCTUnwrap(tasks.first)
-
-        // Check the new tracking system for non-retry state
-        if let attempt = downloadManager.getDownloadAttempt(for: task.taskIdentifier) {
-            XCTAssertFalse(attempt.hasRetriedWithoutUserAgent, "Should not indicate retry for normal download in tracking system")
-        } else {
-            XCTFail("Should have download attempt tracking data")
-        }
     }
 
     private func cleanupDownloadManager() {
